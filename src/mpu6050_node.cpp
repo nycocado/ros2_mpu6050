@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <memory>
+#include <cmath>
 
 using namespace std::chrono_literals;
 
@@ -20,6 +21,7 @@ Mpu6050Node::Mpu6050Node(const std::string& name)
     this->declare_parameter<double>("accel_x_offset", 0.0);
     this->declare_parameter<double>("accel_y_offset", 0.0);
     this->declare_parameter<double>("accel_z_offset", 0.0);
+    this->declare_parameter<double>("gyro_deadband", 0.01);
 
     /* Assign offset values */
     gyro_x_offset_ = this->get_parameter("gyro_x_offset").as_double();
@@ -28,6 +30,7 @@ Mpu6050Node::Mpu6050Node(const std::string& name)
     accel_x_offset_ = this->get_parameter("accel_x_offset").as_double();
     accel_y_offset_ = this->get_parameter("accel_y_offset").as_double();
     accel_z_offset_ = this->get_parameter("accel_z_offset").as_double();
+    gyro_deadband_ = this->get_parameter("gyro_deadband").as_double();
 
     /* Assign sensor paramaters */
     mpu6050_dev_->Mpu6050_GyroFsSel(static_cast<Mpu6050::Mpu6050_FsSel_t>(this->get_parameter("gyro_fs_sel").as_int()));
@@ -58,9 +61,18 @@ void Mpu6050Node::ImuPubCallback()
     message.linear_acceleration.y = AccelData.Accel_Y - accel_y_offset_;
     message.linear_acceleration.z = AccelData.Accel_Z - accel_z_offset_;
     message.angular_velocity_covariance[0] = {0};
-    message.angular_velocity.x = (GyroData.Gyro_X - gyro_x_offset_) * (M_PI / 180.0);
-    message.angular_velocity.y = (GyroData.Gyro_Y - gyro_y_offset_) * (M_PI / 180.0);
-    message.angular_velocity.z = (GyroData.Gyro_Z - gyro_z_offset_) * (M_PI / 180.0);
+
+    auto apply_deadband = [this](double val) {
+        return (std::abs(val) < gyro_deadband_) ? 0.0 : val;
+    };
+
+    double gx = (GyroData.Gyro_X - gyro_x_offset_) * (M_PI / 180.0);
+    double gy = (GyroData.Gyro_Y - gyro_y_offset_) * (M_PI / 180.0);
+    double gz = (GyroData.Gyro_Z - gyro_z_offset_) * (M_PI / 180.0);
+
+    message.angular_velocity.x = apply_deadband(gx);
+    message.angular_velocity.y = apply_deadband(gy);
+    message.angular_velocity.z = apply_deadband(gz);
     
     message.orientation_covariance[0] = -1;
     message.orientation.x = 0;

@@ -21,6 +21,7 @@ class Mpu6050Node : public rclcpp::Node {
   double accel_x_offset_ {0.0};
   double accel_y_offset_ {0.0};
   double accel_z_offset_ {0.0};
+  double gyro_deadband_ {0.0};
 
 };
 
